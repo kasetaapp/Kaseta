@@ -31,13 +31,6 @@ export default function AppLayout() {
         }}
       />
       <Stack.Screen
-        name="settings"
-        options={{
-          presentation: 'card',
-          animation: 'slide_from_right',
-        }}
-      />
-      <Stack.Screen
         name="organization"
         options={{
           presentation: 'card',
@@ -172,6 +165,13 @@ export default function AppLayout() {
       />
       <Stack.Screen
         name="documents"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="settings"
         options={{
           presentation: 'card',
           animation: 'slide_from_right',

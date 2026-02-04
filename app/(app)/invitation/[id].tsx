@@ -36,7 +36,7 @@ import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { Shadows, DarkShadows } from '@/constants/Shadows';
 import { Text, Button, Card, Badge, Skeleton, IconButton } from '@/components/ui';
 import { useInvitation } from '@/hooks/useInvitations';
-import { AccessType, InvitationStatus } from '@/lib/invitations';
+import { InvitationType, InvitationStatus } from '@/lib/invitations';
 
 const getStatusConfig = (status: InvitationStatus) => {
   const configs: Record<InvitationStatus, { label: string; variant: 'default' | 'success' | 'error' | 'warning' | 'accent' }> = {
@@ -48,11 +48,10 @@ const getStatusConfig = (status: InvitationStatus) => {
   return configs[status];
 };
 
-const getAccessTypeLabel = (type: AccessType): string => {
-  const labels: Record<AccessType, string> = {
+const getInvitationTypeLabel = (type: InvitationType): string => {
+  const labels: Record<InvitationType, string> = {
     single: 'Uso único',
-    multiple: 'Múltiples usos',
-    permanent: 'Permanente',
+    recurring: 'Recurrente',
     temporary: 'Temporal',
   };
   return labels[type];
@@ -234,7 +233,7 @@ Invitación generada con KASETA.
             {isActive && (
               <View style={styles.qrContainer}>
                 <QRCode
-                  value={invitation.qr_code}
+                  value={invitation.qr_data}
                   size={200}
                   color={colors.primary}
                   backgroundColor={colors.background}
@@ -331,7 +330,7 @@ Invitación generada con KASETA.
                   Tipo de acceso
                 </Text>
                 <Text variant="bodyMedium">
-                  {getAccessTypeLabel(invitation.access_type)}
+                  {getInvitationTypeLabel(invitation.type)}
                 </Text>
               </View>
             </View>
@@ -348,37 +347,16 @@ Invitación generada con KASETA.
               </View>
             </View>
 
-            {invitation.valid_until && (
-              <>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.infoRow}>
-                  <Clock size={18} color={colors.textMuted} />
-                  <View style={styles.infoContent}>
-                    <Text variant="caption" color="muted">
-                      Válida hasta
-                    </Text>
-                    <Text variant="bodyMedium">{formatDate(invitation.valid_until)}</Text>
-                  </View>
-                </View>
-              </>
-            )}
-
-            {invitation.access_type === 'multiple' && (
-              <>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <View style={styles.infoRow}>
-                  <User size={18} color={colors.textMuted} />
-                  <View style={styles.infoContent}>
-                    <Text variant="caption" color="muted">
-                      Usos
-                    </Text>
-                    <Text variant="bodyMedium">
-                      {invitation.current_uses} / {invitation.max_uses}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            )}
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={styles.infoRow}>
+              <Clock size={18} color={colors.textMuted} />
+              <View style={styles.infoContent}>
+                <Text variant="caption" color="muted">
+                  Válida hasta
+                </Text>
+                <Text variant="bodyMedium">{formatDate(invitation.valid_until)}</Text>
+              </View>
+            </View>
 
             {invitation.notes && (
               <>

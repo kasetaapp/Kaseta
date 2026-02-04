@@ -22,7 +22,11 @@ export default function AdminLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="users" />
       <Stack.Screen name="units" />
+      <Stack.Screen name="members" />
+      <Stack.Screen name="access-logs" />
+      <Stack.Screen name="invitations" />
       <Stack.Screen name="reports" />
+      <Stack.Screen name="roles" />
     </Stack>
   );
 }

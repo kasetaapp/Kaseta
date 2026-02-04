@@ -25,6 +25,7 @@ import {
   ChevronRight,
   TrendingUp,
   TrendingDown,
+  Shield,
 } from 'lucide-react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors, DarkColors } from '@/constants/Colors';
@@ -172,6 +173,13 @@ export default function AdminDashboardScreen() {
       subtitle: 'Ver estadísticas',
       color: '#EC4899',
       route: '/(app)/admin/reports',
+    },
+    {
+      icon: Shield,
+      title: 'Roles y permisos',
+      subtitle: 'Gestionar accesos',
+      color: '#6366F1',
+      route: '/(app)/admin/roles',
     },
   ];
 

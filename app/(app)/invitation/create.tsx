@@ -23,9 +23,9 @@ import { Colors, DarkColors } from '@/constants/Colors';
 import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { Text, Button, Input, Card, Badge } from '@/components/ui';
 import { useInvitations } from '@/hooks/useInvitations';
-import { AccessType } from '@/lib/invitations';
+import { InvitationType } from '@/lib/invitations';
 
-const ACCESS_TYPES: { key: AccessType; label: string; description: string; icon: string }[] = [
+const INVITATION_TYPES: { key: InvitationType; label: string; description: string; icon: string }[] = [
   {
     key: 'single',
     label: 'Uso único',
@@ -33,8 +33,8 @@ const ACCESS_TYPES: { key: AccessType; label: string; description: string; icon:
     icon: '1️⃣',
   },
   {
-    key: 'multiple',
-    label: 'Múltiples usos',
+    key: 'recurring',
+    label: 'Recurrente',
     description: 'Válida para varias entradas',
     icon: '🔄',
   },
@@ -43,12 +43,6 @@ const ACCESS_TYPES: { key: AccessType; label: string; description: string; icon:
     label: 'Temporal',
     description: 'Válida por un periodo de tiempo',
     icon: '⏰',
-  },
-  {
-    key: 'permanent',
-    label: 'Permanente',
-    description: 'Acceso sin fecha de expiración',
-    icon: '♾️',
   },
 ];
 
@@ -63,10 +57,9 @@ export default function CreateInvitationScreen() {
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
   const [visitorEmail, setVisitorEmail] = useState('');
-  const [accessType, setAccessType] = useState<AccessType>('single');
+  const [invitationType, setInvitationType] = useState<InvitationType>('single');
   const [validFrom, setValidFrom] = useState(new Date());
-  const [validUntil, setValidUntil] = useState<Date | null>(null);
-  const [maxUses, setMaxUses] = useState('3');
+  const [validUntil, setValidUntil] = useState<Date>(new Date(Date.now() + 24 * 60 * 60 * 1000)); // Default: tomorrow
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,18 +74,17 @@ export default function CreateInvitationScreen() {
     router.back();
   }, []);
 
-  const handleAccessTypeChange = useCallback((type: AccessType) => {
+  const handleInvitationTypeChange = useCallback((type: InvitationType) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setAccessType(type);
+    setInvitationType(type);
 
     // Set default validUntil based on type
-    if (type === 'temporary' || type === 'multiple') {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 7);
-      setValidUntil(tomorrow);
-    } else if (type === 'permanent') {
-      setValidUntil(null);
+    if (type === 'temporary' || type === 'recurring') {
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      setValidUntil(nextWeek);
     } else {
+      // Single use - default to tomorrow
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       setValidUntil(tomorrow);
@@ -113,10 +105,9 @@ export default function CreateInvitationScreen() {
         visitor_name: visitorName.trim(),
         visitor_phone: visitorPhone.trim() || undefined,
         visitor_email: visitorEmail.trim() || undefined,
-        access_type: accessType,
+        type: invitationType,
         valid_from: validFrom,
-        valid_until: validUntil || undefined,
-        max_uses: accessType === 'multiple' ? parseInt(maxUses, 10) || 3 : 1,
+        valid_until: validUntil,
         notes: notes.trim() || undefined,
       });
 
@@ -138,10 +129,9 @@ export default function CreateInvitationScreen() {
     visitorName,
     visitorPhone,
     visitorEmail,
-    accessType,
+    invitationType,
     validFrom,
     validUntil,
-    maxUses,
     notes,
     create,
   ]);
@@ -224,31 +214,31 @@ export default function CreateInvitationScreen() {
             <Text variant="h4" style={styles.sectionTitle}>
               Tipo de acceso
             </Text>
-            <View style={styles.accessTypes}>
-              {ACCESS_TYPES.map((type) => (
+            <View style={styles.invitationTypes}>
+              {INVITATION_TYPES.map((type) => (
                 <Pressable
                   key={type.key}
-                  onPress={() => handleAccessTypeChange(type.key)}
+                  onPress={() => handleInvitationTypeChange(type.key)}
                   style={[
-                    styles.accessTypeCard,
+                    styles.invitationTypeCard,
                     {
                       backgroundColor:
-                        accessType === type.key
+                        invitationType === type.key
                           ? colors.accent + '15'
                           : colors.surface,
                       borderColor:
-                        accessType === type.key
+                        invitationType === type.key
                           ? colors.accent
                           : colors.border,
                     },
                   ]}
                 >
                   <Text variant="display">{type.icon}</Text>
-                  <View style={styles.accessTypeInfo}>
+                  <View style={styles.invitationTypeInfo}>
                     <Text
                       variant="bodyMedium"
                       customColor={
-                        accessType === type.key
+                        invitationType === type.key
                           ? colors.primary
                           : colors.text
                       }
@@ -259,7 +249,7 @@ export default function CreateInvitationScreen() {
                       {type.description}
                     </Text>
                   </View>
-                  {accessType === type.key && (
+                  {invitationType === type.key && (
                     <Badge variant="accent" size="sm">
                       ✓
                     </Badge>
@@ -291,62 +281,24 @@ export default function CreateInvitationScreen() {
                 </View>
               </Pressable>
 
-              {accessType !== 'permanent' && (
-                <>
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                  <Pressable
-                    onPress={() => {
-                      setDatePickerMode('date');
-                      setShowUntilPicker(true);
-                    }}
-                    style={styles.dateButton}
-                  >
-                    <Clock size={18} color={colors.textMuted} />
-                    <View style={styles.dateInfo}>
-                      <Text variant="caption" color="muted">
-                        Válida hasta
-                      </Text>
-                      <Text variant="bodyMedium">
-                        {validUntil ? formatDate(validUntil) : 'Seleccionar'}
-                      </Text>
-                    </View>
-                  </Pressable>
-                </>
-              )}
-
-              {accessType === 'multiple' && (
-                <>
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                  <View style={styles.maxUsesRow}>
-                    <Text variant="body">Máximo de usos</Text>
-                    <View style={styles.maxUsesInput}>
-                      <Pressable
-                        onPress={() => {
-                          const val = Math.max(1, parseInt(maxUses, 10) - 1);
-                          setMaxUses(val.toString());
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                        style={[styles.maxUsesButton, { backgroundColor: colors.surface }]}
-                      >
-                        <Text variant="bodyMedium">-</Text>
-                      </Pressable>
-                      <Text variant="h3" style={styles.maxUsesValue}>
-                        {maxUses}
-                      </Text>
-                      <Pressable
-                        onPress={() => {
-                          const val = Math.min(99, parseInt(maxUses, 10) + 1);
-                          setMaxUses(val.toString());
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                        style={[styles.maxUsesButton, { backgroundColor: colors.surface }]}
-                      >
-                        <Text variant="bodyMedium">+</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </>
-              )}
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <Pressable
+                onPress={() => {
+                  setDatePickerMode('date');
+                  setShowUntilPicker(true);
+                }}
+                style={styles.dateButton}
+              >
+                <Clock size={18} color={colors.textMuted} />
+                <View style={styles.dateInfo}>
+                  <Text variant="caption" color="muted">
+                    Válida hasta
+                  </Text>
+                  <Text variant="bodyMedium">
+                    {formatDate(validUntil)}
+                  </Text>
+                </View>
+              </Pressable>
             </Card>
           </Animated.View>
 
@@ -471,10 +423,10 @@ const styles = StyleSheet.create({
   inputSpacing: {
     marginTop: Spacing.md,
   },
-  accessTypes: {
+  invitationTypes: {
     gap: Spacing.sm,
   },
-  accessTypeCard: {
+  invitationTypeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
@@ -482,7 +434,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: Spacing.smd,
   },
-  accessTypeInfo: {
+  invitationTypeInfo: {
     flex: 1,
   },
   dateButton: {

@@ -190,8 +190,8 @@ export const SkeletonConfig = {
   /** Shimmer gradient colors (light mode) */
   gradientColors: ['#F4F4F5', '#E4E4E7', '#F4F4F5'] as [string, string, string],
 
-  /** Shimmer gradient colors (dark mode) */
-  gradientColorsDark: ['#27272A', '#3F3F46', '#27272A'] as [string, string, string],
+  /** Shimmer gradient colors (dark mode) - brighter for better visibility */
+  gradientColorsDark: ['#3F3F46', '#52525B', '#3F3F46'] as [string, string, string],
 } as const;
 
 /**

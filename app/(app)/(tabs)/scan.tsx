@@ -29,7 +29,7 @@ import {
   validateInvitation,
   registerAccess,
   Invitation,
-  AccessType,
+  InvitationType,
 } from '@/lib/invitations';
 import { supabase } from '@/lib/supabase';
 
@@ -39,18 +39,14 @@ type ScanState = 'idle' | 'scanning' | 'validating' | 'success' | 'error';
 interface AccessLog {
   id: string;
   visitor_name: string;
-  unit_id: string;
-  access_type: 'entry' | 'exit';
-  accessed_at: string;
-  unit?: {
-    name: string;
-  };
+  direction: 'entry' | 'exit';
+  entry_type: 'invitation' | 'manual' | 'resident';
+  created_at: string;
 }
 
-const ACCESS_TYPE_LABELS: Record<AccessType, string> = {
+const INVITATION_TYPE_LABELS: Record<InvitationType, string> = {
   single: 'Visita única',
-  multiple: 'Acceso múltiple',
-  permanent: 'Acceso permanente',
+  recurring: 'Acceso recurrente',
   temporary: 'Acceso temporal',
 };
 
@@ -92,16 +88,9 @@ export default function ScanScreen() {
       setIsLoadingLogs(true);
       const { data, error } = await supabase
         .from('access_logs')
-        .select(`
-          id,
-          visitor_name,
-          unit_id,
-          access_type,
-          accessed_at,
-          unit:units(name)
-        `)
+        .select('id, visitor_name, direction, entry_type, created_at')
         .eq('organization_id', currentOrganization.id)
-        .order('accessed_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(5);
 
       if (error) throw error;
@@ -298,34 +287,22 @@ export default function ScanScreen() {
                       Tipo de acceso
                     </Text>
                     <Text variant="bodyMedium">
-                      {ACCESS_TYPE_LABELS[validatedInvitation.access_type]}
+                      {INVITATION_TYPE_LABELS[validatedInvitation.type]}
                     </Text>
                   </View>
-                  {validatedInvitation.valid_until && (
-                    <View style={styles.resultRow}>
-                      <Text variant="bodySm" color="muted">
-                        Válida hasta
-                      </Text>
-                      <Text variant="bodyMedium">
-                        {new Date(validatedInvitation.valid_until).toLocaleDateString('es-MX', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                    </View>
-                  )}
-                  {validatedInvitation.access_type === 'multiple' && (
-                    <View style={styles.resultRow}>
-                      <Text variant="bodySm" color="muted">
-                        Usos
-                      </Text>
-                      <Text variant="bodyMedium">
-                        {validatedInvitation.current_uses} / {validatedInvitation.max_uses}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.resultRow}>
+                    <Text variant="bodySm" color="muted">
+                      Válida hasta
+                    </Text>
+                    <Text variant="bodyMedium">
+                      {new Date(validatedInvitation.valid_until).toLocaleDateString('es-MX', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
                   {validatedInvitation.notes && (
                     <View style={[styles.resultRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
                       <Text variant="bodySm" color="muted" style={{ marginBottom: Spacing.xs }}>
@@ -581,15 +558,14 @@ export default function ScanScreen() {
                     <View style={styles.recentInfo}>
                       <Text variant="bodySmMedium">{log.visitor_name || 'Visitante'}</Text>
                       <Text variant="caption" color="muted">
-                        {formatRelativeTime(log.accessed_at)}
-                        {log.unit?.name && ` · ${log.unit.name}`}
+                        {formatRelativeTime(log.created_at)}
                       </Text>
                     </View>
                     <Badge
-                      variant={log.access_type === 'entry' ? 'success' : 'default'}
+                      variant={log.direction === 'entry' ? 'success' : 'default'}
                       size="sm"
                     >
-                      {log.access_type === 'entry' ? 'Entrada' : 'Salida'}
+                      {log.direction === 'entry' ? 'Entrada' : 'Salida'}
                     </Badge>
                   </View>
                 </Card>

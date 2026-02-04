@@ -102,7 +102,6 @@ export default function HomeScreen() {
     }
 
     try {
-      const unitId = currentMembership.unit_id;
       const orgId = currentOrganization.id;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -110,52 +109,44 @@ export default function HomeScreen() {
       // Fetch stats in parallel
       const [activeInvRes, todayAccessRes, pendingInvRes, pendingPackagesRes, recentInvRes, recentAccessRes] = await Promise.all([
         // Active invitations count
-        unitId
-          ? supabase
-              .from('invitations')
-              .select('id', { count: 'exact', head: true })
-              .eq('unit_id', unitId)
-              .eq('status', 'active')
-          : Promise.resolve({ count: 0 }),
+        supabase
+          .from('invitations')
+          .select('id', { count: 'exact', head: true })
+          .eq('created_by', user?.id)
+          .eq('status', 'active'),
         // Visitors today count
         supabase
           .from('access_logs')
           .select('id', { count: 'exact', head: true })
           .eq('organization_id', orgId)
-          .eq('access_type', 'entry')
-          .gte('accessed_at', today.toISOString()),
-        // Pending invitations (created today, not yet used)
-        unitId
-          ? supabase
-              .from('invitations')
-              .select('id', { count: 'exact', head: true })
-              .eq('unit_id', unitId)
-              .eq('status', 'active')
-              .eq('current_uses', 0)
-          : Promise.resolve({ count: 0 }),
-        // Pending packages for unit
-        unitId
-          ? supabase
-              .from('packages')
-              .select('id', { count: 'exact', head: true })
-              .eq('unit_id', unitId)
-              .eq('status', 'received')
-          : Promise.resolve({ count: 0 }),
+          .eq('entry_type', 'entry')
+          .gte('created_at', today.toISOString()),
+        // Pending invitations (active, not yet used)
+        supabase
+          .from('invitations')
+          .select('id', { count: 'exact', head: true })
+          .eq('created_by', user?.id)
+          .eq('status', 'active')
+          .is('used_at', null),
+        // Pending packages for organization
+        supabase
+          .from('packages')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId)
+          .eq('status', 'received'),
         // Recent invitations
-        unitId
-          ? supabase
-              .from('invitations')
-              .select('id, visitor_name, status, created_at')
-              .eq('unit_id', unitId)
-              .order('created_at', { ascending: false })
-              .limit(5)
-          : Promise.resolve({ data: [] }),
+        supabase
+          .from('invitations')
+          .select('id, visitor_name, status, created_at')
+          .eq('created_by', user?.id)
+          .order('created_at', { ascending: false })
+          .limit(5),
         // Recent access logs
         supabase
           .from('access_logs')
-          .select('id, visitor_name, access_type, accessed_at')
+          .select('id, visitor_name, entry_type, direction, created_at')
           .eq('organization_id', orgId)
-          .order('accessed_at', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(5),
       ]);
 
@@ -174,14 +165,14 @@ export default function HomeScreen() {
             .from('access_logs')
             .select('id', { count: 'exact', head: true })
             .eq('organization_id', orgId)
-            .eq('access_type', 'entry')
-            .gte('accessed_at', today.toISOString()),
+            .eq('direction', 'entry')
+            .gte('created_at', today.toISOString()),
           supabase
             .from('access_logs')
             .select('id', { count: 'exact', head: true })
             .eq('organization_id', orgId)
-            .eq('access_type', 'exit')
-            .gte('accessed_at', today.toISOString()),
+            .eq('direction', 'exit')
+            .gte('created_at', today.toISOString()),
           supabase
             .from('invitations')
             .select('id', { count: 'exact', head: true })
@@ -210,15 +201,16 @@ export default function HomeScreen() {
       const accessLogs = (recentAccessRes.data || []).map((log: {
         id: string;
         visitor_name: string;
-        access_type: 'entry' | 'exit';
-        accessed_at: string;
+        entry_type: 'invitation' | 'manual' | 'resident';
+        direction?: 'entry' | 'exit';
+        created_at: string;
       }) => ({
         id: `log-${log.id}`,
-        type: log.access_type === 'entry' ? 'access_entry' as const : 'access_exit' as const,
+        type: log.direction === 'exit' ? 'access_exit' as const : 'access_entry' as const,
         visitorName: log.visitor_name || 'Visitante',
-        time: formatRelativeTime(log.accessed_at),
+        time: formatRelativeTime(log.created_at),
         status: 'completed' as const,
-        raw_time: log.accessed_at,
+        raw_time: log.created_at,
       }));
 
       // Combine, sort by time, and take top 5
@@ -236,6 +228,13 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Safety timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 8000);
+
+    return () => clearTimeout(timeout);
   }, [fetchDashboardData]);
 
   const handleRefresh = useCallback(async () => {

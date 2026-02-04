@@ -29,10 +29,10 @@ export type UserRole = 'resident' | 'admin' | 'guard' | 'super_admin';
 export interface Organization {
   id: string;
   name: string;
-  type: OrganizationType;
-  slug: string | null;
-  logo_url: string | null;
-  settings: Record<string, unknown>;
+  type?: OrganizationType; // Optional as it may not exist in all schemas
+  slug?: string | null;
+  logo_url?: string | null;
+  settings?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -48,12 +48,20 @@ export interface Membership {
   id: string;
   user_id: string;
   organization_id: string;
-  unit_id: string | null;
-  role: UserRole;
-  is_active: boolean;
-  joined_at: string;
+  unit_id: string | null; // Maps to 'unit' column in DB
+  role: UserRole; // Legacy role field for backward compatibility
+  role_id: string | null; // New: references roles table
+  is_active: boolean; // Computed from status or defaults to true
+  joined_at: string; // Maps to 'created_at' column in DB
   organization?: Organization;
   unit?: Unit;
+  role_info?: {
+    id: string;
+    name: string;
+    slug: string;
+    color: string;
+    hierarchy_level: number;
+  };
 }
 
 interface OrganizationContextValue {
@@ -114,22 +122,71 @@ export function OrganizationProvider({
       setIsLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
+      // Fetch memberships first
+      const { data: rawMembershipsData, error: membershipsError } = await supabase
         .from('memberships')
-        .select(`
-          *,
-          organization:organizations(*),
-          unit:units(*)
-        `)
+        .select('*')
         .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('joined_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
-      if (fetchError) {
-        throw fetchError;
+      // Map database columns to our interface
+      const membershipsData = (rawMembershipsData || []).map((m: any) => ({
+        ...m,
+        unit_id: m.unit_id || m.unit || null, // Handle both column names
+        joined_at: m.joined_at || m.created_at,
+        is_active: m.is_active !== undefined ? m.is_active : true,
+      }));
+
+      if (membershipsError) {
+        throw membershipsError;
       }
 
-      const membershipData = (data || []) as Membership[];
+      if (!membershipsData || membershipsData.length === 0) {
+        setMemberships([]);
+        setCurrentMembership(null);
+        await AsyncStorage.removeItem(ACTIVE_MEMBERSHIP_KEY);
+        setIsLoading(false);
+        return;
+      }
+
+      // Get unique organization, unit, and role IDs
+      const orgIds = [...new Set(membershipsData.map(m => m.organization_id))];
+      const unitIds = [...new Set(membershipsData.map(m => m.unit_id).filter(Boolean))];
+      const roleIds = [...new Set(membershipsData.map(m => m.role_id).filter(Boolean))];
+
+      // Fetch organizations
+      const { data: orgsData } = await supabase
+        .from('organizations')
+        .select('*')
+        .in('id', orgIds);
+
+      // Fetch units if any
+      let unitsData: any[] = [];
+      if (unitIds.length > 0) {
+        const { data } = await supabase
+          .from('units')
+          .select('*')
+          .in('id', unitIds);
+        unitsData = data || [];
+      }
+
+      // Fetch roles if any
+      let rolesData: any[] = [];
+      if (roleIds.length > 0) {
+        const { data } = await supabase
+          .from('roles')
+          .select('id, name, slug, color, hierarchy_level')
+          .in('id', roleIds);
+        rolesData = data || [];
+      }
+
+      // Combine the data
+      const membershipData = membershipsData.map(m => ({
+        ...m,
+        organization: orgsData?.find(o => o.id === m.organization_id),
+        unit: unitsData.find(u => u.id === m.unit_id),
+        role_info: rolesData.find(r => r.id === m.role_id),
+      })) as Membership[];
       setMemberships(membershipData);
 
       // Try to restore last active membership
@@ -193,6 +250,13 @@ export function OrganizationProvider({
       setCurrentMembership(null);
       setIsLoading(false);
     }
+
+    // Safety timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 10000);
+
+    return () => clearTimeout(timeout);
   }, [isAuthenticated, user?.id, fetchMemberships]);
 
   // Subscribe to realtime changes

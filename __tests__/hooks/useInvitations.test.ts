@@ -7,10 +7,15 @@ const mockChannel = {
   subscribe: jest.fn(),
 };
 
+const mockGetUser = jest.fn();
+
 jest.mock('@/lib/supabase', () => ({
   supabase: {
     channel: jest.fn(() => mockChannel),
     removeChannel: jest.fn(),
+    auth: {
+      getUser: () => mockGetUser(),
+    },
   },
 }));
 
@@ -37,6 +42,9 @@ jest.mock('@/contexts/OrganizationContext', () => ({
 describe('useInvitations Hook', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+    });
     mockUseOrganization.mockReturnValue({
       currentMembership: { unit_id: 'unit-123' },
       currentOrganization: { id: 'org-456' },
@@ -60,8 +68,8 @@ describe('useInvitations Hook', () => {
 
   it('fetches invitations on mount', async () => {
     const mockInvitations = [
-      { id: '1', guest_name: 'John Doe', status: 'pending' },
-      { id: '2', guest_name: 'Jane Doe', status: 'approved' },
+      { id: '1', visitor_name: 'John Doe', status: 'active' },
+      { id: '2', visitor_name: 'Jane Doe', status: 'used' },
     ];
 
     mockGetInvitations.mockResolvedValue({
@@ -76,7 +84,7 @@ describe('useInvitations Hook', () => {
     });
 
     expect(result.current.invitations).toEqual(mockInvitations);
-    expect(mockGetInvitations).toHaveBeenCalledWith('unit-123', undefined);
+    expect(mockGetInvitations).toHaveBeenCalledWith('user-123', undefined);
   });
 
   it('filters invitations by status when provided', async () => {
@@ -85,10 +93,10 @@ describe('useInvitations Hook', () => {
       error: null,
     });
 
-    renderHook(() => useInvitations({ status: ['pending', 'approved'] }));
+    renderHook(() => useInvitations({ status: ['active', 'used'] }));
 
     await waitFor(() => {
-      expect(mockGetInvitations).toHaveBeenCalledWith('unit-123', ['pending', 'approved']);
+      expect(mockGetInvitations).toHaveBeenCalledWith('user-123', ['active', 'used']);
     });
   });
 
@@ -108,10 +116,9 @@ describe('useInvitations Hook', () => {
     expect(result.current.error).toEqual(mockError);
   });
 
-  it('returns empty invitations when no unit is selected', async () => {
-    mockUseOrganization.mockReturnValue({
-      currentMembership: null,
-      currentOrganization: { id: 'org-456' },
+  it('returns empty invitations when no user is authenticated', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
     });
 
     const { result } = renderHook(() => useInvitations());
@@ -127,8 +134,8 @@ describe('useInvitations Hook', () => {
   it('creates invitation correctly', async () => {
     const newInvitation = {
       id: 'new-1',
-      guest_name: 'New Guest',
-      status: 'pending',
+      visitor_name: 'New Guest',
+      status: 'active',
     };
 
     mockCreateInvitation.mockResolvedValue({
@@ -145,17 +152,22 @@ describe('useInvitations Hook', () => {
     let createdInvitation;
     await act(async () => {
       createdInvitation = await result.current.create({
-        guest_name: 'New Guest',
-        guest_email: 'guest@example.com',
+        visitor_name: 'New Guest',
+        visitor_email: 'guest@example.com',
+        type: 'single',
+        valid_from: new Date(),
+        valid_until: new Date(Date.now() + 86400000),
       });
     });
 
     expect(createdInvitation).toEqual(newInvitation);
     expect(mockCreateInvitation).toHaveBeenCalledWith({
-      guest_name: 'New Guest',
-      guest_email: 'guest@example.com',
+      visitor_name: 'New Guest',
+      visitor_email: 'guest@example.com',
+      type: 'single',
+      valid_from: expect.any(Date),
+      valid_until: expect.any(Date),
       organization_id: 'org-456',
-      unit_id: 'unit-123',
     });
   });
 
@@ -181,7 +193,7 @@ describe('useInvitations Hook', () => {
   });
 
   it('gets invitation by ID', async () => {
-    const mockInvitation = { id: 'inv-1', guest_name: 'Test Guest' };
+    const mockInvitation = { id: 'inv-1', visitor_name: 'Test Guest' };
     mockGetInvitationById.mockResolvedValue({
       invitation: mockInvitation,
       error: null,
@@ -219,7 +231,7 @@ describe('useInvitation Hook (single invitation)', () => {
   });
 
   it('fetches single invitation by ID', async () => {
-    const mockInvitation = { id: 'inv-1', guest_name: 'Test Guest', status: 'pending' };
+    const mockInvitation = { id: 'inv-1', visitor_name: 'Test Guest', status: 'active' };
     mockGetInvitationById.mockResolvedValue({
       invitation: mockInvitation,
       error: null,
@@ -247,7 +259,7 @@ describe('useInvitation Hook (single invitation)', () => {
   });
 
   it('cancels invitation correctly', async () => {
-    const mockInvitation = { id: 'inv-1', guest_name: 'Test Guest', status: 'pending' };
+    const mockInvitation = { id: 'inv-1', visitor_name: 'Test Guest', status: 'active' };
     mockGetInvitationById.mockResolvedValue({
       invitation: mockInvitation,
       error: null,

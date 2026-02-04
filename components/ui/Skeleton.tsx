@@ -60,12 +60,13 @@ export function Skeleton({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const opacity = useSharedValue(0.4);
+  // Higher opacity for better dark mode visibility
+  const opacity = useSharedValue(isDark ? 0.7 : 0.4);
 
   useEffect(() => {
     if (animate) {
       opacity.value = withRepeat(
-        withTiming(0.8, {
+        withTiming(isDark ? 1 : 0.8, {
           duration: SkeletonConfig.duration / 2,
           easing: Easing.inOut(Easing.ease),
         }),
@@ -73,7 +74,7 @@ export function Skeleton({
         true
       );
     }
-  }, [animate, opacity]);
+  }, [animate, opacity, isDark]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

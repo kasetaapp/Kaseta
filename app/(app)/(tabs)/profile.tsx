@@ -15,7 +15,9 @@ import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { Text, Card, Avatar, Badge, Divider, Skeleton } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { OrganizationSwitcher, OrganizationSwitcherRef } from '@/components/features/OrganizationSwitcher';
+import { getRoleDisplayName, getRoleColor } from '@/lib/permissions';
 
 interface MenuItemProps {
   icon: string;
@@ -93,9 +95,15 @@ export default function ProfileScreen() {
     currentOrganization,
     currentUnit,
     currentRole,
-    isAdmin,
+    currentMembership,
     memberships,
   } = useOrganization();
+
+  // Use new permission system
+  const { canAny, role, isAdmin: hasAdminPermissions } = usePermissions();
+
+  // Check if user can access admin panel
+  const canAccessAdmin = canAny(['members.view', 'units.view', 'reports.view']);
 
   const orgSwitcherRef = useRef<OrganizationSwitcherRef>(null);
 
@@ -145,7 +153,11 @@ export default function ProfileScreen() {
   const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Usuario';
   const displayEmail = profile?.email || user?.email || '';
   const displayPhone = profile?.phone || user?.phone || '';
-  const displayRole = currentRole ? ROLE_LABELS[currentRole] || currentRole : 'Sin rol';
+  // Use new role system if available, fallback to legacy
+  const displayRole = role?.name
+    || currentMembership?.role_info?.name
+    || (currentRole ? ROLE_LABELS[currentRole] || currentRole : 'Sin rol');
+  const roleColor = role?.color || currentMembership?.role_info?.color || colors.accent;
   const displayOrganization = currentOrganization?.name || null;
   const displayUnit = currentUnit?.name || null;
 
@@ -287,7 +299,7 @@ export default function ProfileScreen() {
         )}
 
         {/* Admin Section */}
-        {isAdmin && displayOrganization && (
+        {canAccessAdmin && displayOrganization && (
           <Animated.View entering={FadeInDown.delay(225).springify()}>
             <Text variant="h4" style={styles.sectionTitle}>
               Administración

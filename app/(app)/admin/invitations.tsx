@@ -192,11 +192,6 @@ export default function AdminInvitationsScreen() {
                     {item.short_code}
                   </Text>
                 </View>
-                {item.access_type === 'multiple' && (
-                  <Text variant="caption" color="muted">
-                    {item.current_uses} / {item.max_uses} usos
-                  </Text>
-                )}
               </View>
             </Card>
           </Pressable>

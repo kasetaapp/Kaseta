@@ -6,41 +6,36 @@
 import { supabase } from './supabase';
 import * as Crypto from 'expo-crypto';
 
-// Types
-export type AccessType = 'single' | 'multiple' | 'permanent' | 'temporary';
+// Types - aligned with Supabase schema
+export type InvitationType = 'single' | 'recurring' | 'temporary';
 export type InvitationStatus = 'active' | 'used' | 'expired' | 'cancelled';
 
 export interface Invitation {
   id: string;
   organization_id: string;
-  unit_id: string;
   created_by: string;
   visitor_name: string;
   visitor_phone: string | null;
   visitor_email: string | null;
-  access_type: AccessType;
+  type: InvitationType;
   valid_from: string;
-  valid_until: string | null;
-  max_uses: number;
-  current_uses: number;
-  qr_code: string;
-  short_code: string | null;
-  notes: string | null;
+  valid_until: string;
+  qr_data: string;
+  short_code: string;
+  used_at: string | null;
+  notes?: string | null;
   status: InvitationStatus;
   created_at: string;
-  updated_at: string;
 }
 
 export interface CreateInvitationParams {
   organization_id: string;
-  unit_id: string;
   visitor_name: string;
   visitor_phone?: string;
   visitor_email?: string;
-  access_type: AccessType;
+  type: InvitationType;
   valid_from: Date;
-  valid_until?: Date;
-  max_uses?: number;
+  valid_until: Date;
   notes?: string;
 }
 
@@ -50,8 +45,8 @@ export interface ValidateInvitationResult {
   message: string;
 }
 
-// Generate unique QR code content
-async function generateQRCode(): Promise<string> {
+// Generate unique QR data content
+async function generateQRData(): Promise<string> {
   const uuid = await Crypto.randomUUID();
   return `KASETA:${uuid}`;
 }
@@ -77,25 +72,22 @@ export async function createInvitation(
       throw new Error('User not authenticated');
     }
 
-    const qr_code = await generateQRCode();
+    const qr_data = await generateQRData();
     const short_code = generateShortCode();
 
     const { data, error } = await supabase
       .from('invitations')
       .insert({
         organization_id: params.organization_id,
-        unit_id: params.unit_id,
         created_by: user.id,
         visitor_name: params.visitor_name,
         visitor_phone: params.visitor_phone || null,
         visitor_email: params.visitor_email || null,
-        access_type: params.access_type,
+        type: params.type,
         valid_from: params.valid_from.toISOString(),
-        valid_until: params.valid_until?.toISOString() || null,
-        max_uses: params.max_uses || 1,
-        qr_code,
+        valid_until: params.valid_until.toISOString(),
+        qr_data,
         short_code,
-        notes: params.notes || null,
         status: 'active',
       })
       .select()
@@ -110,15 +102,15 @@ export async function createInvitation(
   }
 }
 
-// Validate an invitation by QR code or short code
+// Validate an invitation by QR data or short code
 export async function validateInvitation(
   code: string
 ): Promise<ValidateInvitationResult> {
   try {
-    // Determine if it's a QR code or short code
-    const isQRCode = code.startsWith('KASETA:');
-    const column = isQRCode ? 'qr_code' : 'short_code';
-    const searchCode = isQRCode ? code : code.toUpperCase();
+    // Determine if it's a QR data or short code
+    const isQRData = code.startsWith('KASETA:');
+    const column = isQRData ? 'qr_data' : 'short_code';
+    const searchCode = isQRData ? code : code.toUpperCase();
 
     const { data: invitation, error } = await supabase
       .from('invitations')
@@ -153,7 +145,7 @@ export async function validateInvitation(
       };
     }
 
-    if (inv.status === 'used' && inv.access_type === 'single') {
+    if (inv.status === 'used' && inv.type === 'single') {
       return {
         valid: false,
         invitation: inv,
@@ -164,7 +156,7 @@ export async function validateInvitation(
     // Check date validity
     const now = new Date();
     const validFrom = new Date(inv.valid_from);
-    const validUntil = inv.valid_until ? new Date(inv.valid_until) : null;
+    const validUntil = new Date(inv.valid_until);
 
     if (now < validFrom) {
       return {
@@ -174,7 +166,7 @@ export async function validateInvitation(
       };
     }
 
-    if (validUntil && now > validUntil) {
+    if (now > validUntil) {
       // Mark as expired
       await supabase
         .from('invitations')
@@ -185,20 +177,6 @@ export async function validateInvitation(
         valid: false,
         invitation: inv,
         message: 'Esta invitación ha expirado',
-      };
-    }
-
-    // Check max uses for multiple access type
-    if (inv.access_type === 'multiple' && inv.current_uses >= inv.max_uses) {
-      await supabase
-        .from('invitations')
-        .update({ status: 'used' })
-        .eq('id', inv.id);
-
-      return {
-        valid: false,
-        invitation: inv,
-        message: 'Esta invitación ha alcanzado el límite de usos',
       };
     }
 
@@ -220,8 +198,8 @@ export async function validateInvitation(
 // Register access (when guard scans and approves)
 export async function registerAccess(
   invitationId: string,
-  authorizedBy: string,
-  accessType: 'entry' | 'exit' = 'entry'
+  registeredBy: string,
+  direction: 'entry' | 'exit' = 'entry'
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
     // Get invitation details
@@ -241,28 +219,24 @@ export async function registerAccess(
     const { error: logError } = await supabase.from('access_logs').insert({
       organization_id: inv.organization_id,
       invitation_id: invitationId,
-      unit_id: inv.unit_id,
       visitor_name: inv.visitor_name,
-      access_type: accessType,
-      method: 'qr_scan',
-      authorized_by: authorizedBy,
+      entry_type: 'invitation',
+      direction: direction,
+      registered_by: registeredBy,
     });
 
     if (logError) throw logError;
 
-    // Update invitation
-    const newUses = inv.current_uses + 1;
-    const shouldMarkUsed =
-      inv.access_type === 'single' ||
-      (inv.access_type === 'multiple' && newUses >= inv.max_uses);
-
-    await supabase
-      .from('invitations')
-      .update({
-        current_uses: newUses,
-        status: shouldMarkUsed ? 'used' : 'active',
-      })
-      .eq('id', invitationId);
+    // Update invitation - mark as used for single-use invitations
+    if (inv.type === 'single') {
+      await supabase
+        .from('invitations')
+        .update({
+          status: 'used',
+          used_at: new Date().toISOString(),
+        })
+        .eq('id', invitationId);
+    }
 
     return { success: true, error: null };
   } catch (error) {
@@ -271,16 +245,16 @@ export async function registerAccess(
   }
 }
 
-// Get invitations for a unit
+// Get invitations for the current user
 export async function getInvitations(
-  unitId: string,
+  userId: string,
   status?: InvitationStatus[]
 ): Promise<{ invitations: Invitation[]; error: Error | null }> {
   try {
     let query = supabase
       .from('invitations')
       .select('*')
-      .eq('unit_id', unitId)
+      .eq('created_by', userId)
       .order('created_at', { ascending: false });
 
     if (status && status.length > 0) {

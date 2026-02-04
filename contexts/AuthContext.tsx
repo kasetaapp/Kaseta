@@ -105,15 +105,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
+    // Timeout to prevent infinite loading if auth hangs
+    const timeout = setTimeout(() => {
       setIsLoading(false);
-    });
+      console.warn('Auth initialization timed out');
+    }, 5000);
+
+    // Get initial session
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        clearTimeout(timeout);
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        }
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        clearTimeout(timeout);
+        console.warn('Auth initialization error:', error);
+        setIsLoading(false);
+      });
 
     // Listen for auth changes
     const {

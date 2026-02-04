@@ -18,6 +18,7 @@ import { Colors, DarkColors } from '@/constants/Colors';
 import { Layout, Spacing } from '@/constants/Spacing';
 import { Shadows } from '@/constants/Shadows';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 /**
  * Tab bar icon component with Lucide icons
@@ -120,13 +121,21 @@ export default function TabLayout() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? DarkColors : Colors;
 
+  // Use new permission system
+  const { can, canAny, isLoading: permissionsLoading } = usePermissions();
+
+  // Legacy support: also get role info for backward compatibility
   const { currentRole, isGuard, isAdmin, isSuperAdmin } = useOrganization();
 
-  // Determine which tabs to show based on role
-  const showDashboard = isAdmin || isSuperAdmin;
-  const showResidents = isAdmin || isSuperAdmin;
-  const showScan = isGuard || isAdmin || isSuperAdmin;
-  const showInvitations = !isGuard; // Everyone except guards
+  // Determine which tabs to show based on permissions
+  // Falls back to role-based checks if permissions not loaded yet
+  const showScan = permissionsLoading
+    ? (isGuard || isAdmin || isSuperAdmin)
+    : canAny(['access.scan', 'access.manual']);
+
+  const showInvitations = permissionsLoading
+    ? !isGuard
+    : canAny(['invitations.create', 'invitations.view.own', 'invitations.view.all']);
 
   return (
     <Tabs

@@ -21,6 +21,7 @@ import { Colors, DarkColors } from '@/constants/Colors';
 import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { Text, Card, Badge, Skeleton, EmptyState } from '@/components/ui';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
 
 interface Announcement {
@@ -47,7 +48,9 @@ export default function AnnouncementsScreen() {
   const isDark = colorScheme === 'dark';
   const colors = isDark ? DarkColors : Colors;
 
-  const { currentOrganization, isAdmin } = useOrganization();
+  const { currentOrganization } = useOrganization();
+  const { can } = usePermissions();
+  const canCreateAnnouncements = can('announcements.create');
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -207,12 +210,12 @@ export default function AnnouncementsScreen() {
           <ChevronLeft size={24} color={colors.text} />
         </Pressable>
         <Text variant="h2">Anuncios</Text>
-        {isAdmin && (
+        {canCreateAnnouncements && (
           <Pressable onPress={handleCreate} style={styles.addButton}>
             <Plus size={24} color={colors.accent} />
           </Pressable>
         )}
-        {!isAdmin && <View style={{ width: 40 }} />}
+        {!canCreateAnnouncements && <View style={{ width: 40 }} />}
       </Animated.View>
 
       {/* List */}

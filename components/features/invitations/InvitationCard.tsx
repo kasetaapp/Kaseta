@@ -18,7 +18,7 @@ import { Colors, DarkColors } from '@/constants/Colors';
 import { Spacing, BorderRadius } from '@/constants/Spacing';
 import { Shadows, DarkShadows } from '@/constants/Shadows';
 import { Text, Badge, Avatar } from '@/components/ui';
-import { Invitation, InvitationStatus, AccessType } from '@/lib/invitations';
+import { Invitation, InvitationStatus, InvitationType } from '@/lib/invitations';
 
 export interface InvitationCardProps {
   invitation: Invitation;
@@ -36,11 +36,10 @@ const getStatusConfig = (status: InvitationStatus) => {
   return configs[status];
 };
 
-const getAccessTypeLabel = (type: AccessType): string => {
-  const labels: Record<AccessType, string> = {
+const getInvitationTypeLabel = (type: InvitationType): string => {
+  const labels: Record<InvitationType, string> = {
     single: 'Uso único',
-    multiple: 'Múltiples usos',
-    permanent: 'Permanente',
+    recurring: 'Recurrente',
     temporary: 'Temporal',
   };
   return labels[type];
@@ -128,7 +127,7 @@ export function InvitationCard({
                 {invitation.visitor_name}
               </Text>
               <Text variant="caption" color="muted">
-                {getAccessTypeLabel(invitation.access_type)}
+                {getInvitationTypeLabel(invitation.type)}
               </Text>
             </View>
           </View>
@@ -155,15 +154,6 @@ export function InvitationCard({
               <Phone size={14} color={colors.textMuted} />
               <Text variant="bodySm" color="secondary">
                 {invitation.visitor_phone}
-              </Text>
-            </View>
-          )}
-
-          {invitation.access_type === 'multiple' && (
-            <View style={styles.detailRow}>
-              <User size={14} color={colors.textMuted} />
-              <Text variant="bodySm" color="secondary">
-                {invitation.current_uses} / {invitation.max_uses} usos
               </Text>
             </View>
           )}

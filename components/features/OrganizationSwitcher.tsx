@@ -26,7 +26,8 @@ export interface OrganizationSwitcherRef {
   close: () => void;
 }
 
-const getOrganizationTypeLabel = (type: OrganizationType): string => {
+const getOrganizationTypeLabel = (type?: OrganizationType): string => {
+  if (!type) return 'Organización';
   const labels: Record<OrganizationType, string> = {
     residential: 'Residencial',
     corporate: 'Corporativo',
@@ -38,7 +39,8 @@ const getOrganizationTypeLabel = (type: OrganizationType): string => {
   return labels[type] || type;
 };
 
-const getOrganizationTypeEmoji = (type: OrganizationType): string => {
+const getOrganizationTypeEmoji = (type?: OrganizationType): string => {
+  if (!type) return '🏢';
   const emojis: Record<OrganizationType, string> = {
     residential: '🏠',
     corporate: '🏢',

@@ -26,7 +26,7 @@ interface UseInvitationsReturn {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  create: (params: Omit<CreateInvitationParams, 'organization_id' | 'unit_id'>) => Promise<Invitation | null>;
+  create: (params: Omit<CreateInvitationParams, 'organization_id'>) => Promise<Invitation | null>;
   cancel: (invitationId: string) => Promise<boolean>;
   getById: (invitationId: string) => Promise<Invitation | null>;
 }
@@ -35,17 +35,24 @@ export function useInvitations(
   options: UseInvitationsOptions = {}
 ): UseInvitationsReturn {
   const { status, autoRefresh = true } = options;
-  const { currentMembership, currentOrganization } = useOrganization();
+  const { currentOrganization } = useOrganization();
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const unitId = currentMembership?.unit_id;
   const organizationId = currentOrganization?.id;
 
+  // Get current user ID
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id || null);
+    });
+  }, []);
+
   const refresh = useCallback(async () => {
-    if (!unitId) {
+    if (!userId) {
       setInvitations([]);
       setIsLoading(false);
       return;
@@ -56,7 +63,7 @@ export function useInvitations(
       setError(null);
 
       const { invitations: data, error: fetchError } = await getInvitations(
-        unitId,
+        userId,
         status
       );
 
@@ -69,7 +76,7 @@ export function useInvitations(
     } finally {
       setIsLoading(false);
     }
-  }, [unitId, status]);
+  }, [userId, status]);
 
   // Initial fetch
   useEffect(() => {
@@ -78,7 +85,7 @@ export function useInvitations(
 
   // Real-time subscription
   useEffect(() => {
-    if (!unitId || !autoRefresh) return;
+    if (!userId || !autoRefresh) return;
 
     const channel = supabase
       .channel('invitations_changes')
@@ -88,7 +95,7 @@ export function useInvitations(
           event: '*',
           schema: 'public',
           table: 'invitations',
-          filter: `unit_id=eq.${unitId}`,
+          filter: `created_by=eq.${userId}`,
         },
         () => {
           refresh();
@@ -99,21 +106,20 @@ export function useInvitations(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [unitId, autoRefresh, refresh]);
+  }, [userId, autoRefresh, refresh]);
 
   const create = useCallback(
     async (
-      params: Omit<CreateInvitationParams, 'organization_id' | 'unit_id'>
+      params: Omit<CreateInvitationParams, 'organization_id'>
     ): Promise<Invitation | null> => {
-      if (!organizationId || !unitId) {
-        setError(new Error('No organization or unit selected'));
+      if (!organizationId) {
+        setError(new Error('No organization selected'));
         return null;
       }
 
       const { invitation, error: createError } = await createInvitation({
         ...params,
         organization_id: organizationId,
-        unit_id: unitId,
       });
 
       if (createError) {
@@ -128,7 +134,7 @@ export function useInvitations(
 
       return invitation;
     },
-    [organizationId, unitId]
+    [organizationId]
   );
 
   const cancel = useCallback(

@@ -38,6 +38,26 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // Mock react-native-reanimated
 jest.mock('react-native-reanimated', () => {
   const View = require('react-native').View;
+
+  // Create a chainable mock for entering animations
+  const createEnteringAnimation = () => {
+    const animation = {
+      delay: jest.fn(() => animation),
+      springify: jest.fn(() => animation),
+      duration: jest.fn(() => animation),
+      damping: jest.fn(() => animation),
+      mass: jest.fn(() => animation),
+      stiffness: jest.fn(() => animation),
+      overshootClamping: jest.fn(() => animation),
+      restDisplacementThreshold: jest.fn(() => animation),
+      restSpeedThreshold: jest.fn(() => animation),
+      withInitialValues: jest.fn(() => animation),
+      withCallback: jest.fn(() => animation),
+      build: jest.fn(() => ({})),
+    };
+    return animation;
+  };
+
   return {
     default: {
       createAnimatedComponent: (component) => component,
@@ -80,6 +100,17 @@ jest.mock('react-native-reanimated', () => {
     Image: require('react-native').Image,
     ScrollView: require('react-native').ScrollView,
     FlatList: require('react-native').FlatList,
+    // Entering animations
+    FadeInDown: createEnteringAnimation(),
+    FadeInUp: createEnteringAnimation(),
+    FadeIn: createEnteringAnimation(),
+    FadeOut: createEnteringAnimation(),
+    SlideInRight: createEnteringAnimation(),
+    SlideInLeft: createEnteringAnimation(),
+    SlideOutRight: createEnteringAnimation(),
+    SlideOutLeft: createEnteringAnimation(),
+    ZoomIn: createEnteringAnimation(),
+    ZoomOut: createEnteringAnimation(),
   };
 });
 

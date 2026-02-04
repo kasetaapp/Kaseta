@@ -127,7 +127,7 @@ export function OrganizationProvider({
         .from('memberships')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('joined_at', { ascending: false });
 
       // Map database columns to our interface
       const membershipsData = (rawMembershipsData || []).map((m: any) => ({
